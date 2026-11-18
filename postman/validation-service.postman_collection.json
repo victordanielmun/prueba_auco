@@ -1,0 +1,424 @@
+{
+  "info": {
+    "name": "Validation Service",
+    "description": "Colección del microservicio de validación. Define `jwtSecret` igual al JWT_SECRET del servicio: el token se genera solo (pre-request). Ejecuta la colección completa con el Collection Runner para que `validationId` se propague.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Genera un JWT HS256 firmado con {{jwtSecret}} (CryptoJS viene incluido en el sandbox de Postman).",
+          "const secret = pm.collectionVariables.get('jwtSecret');",
+          "const b64url = (words) => CryptoJS.enc.Base64.stringify(words).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+          "const enc = (obj) => b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(obj)));",
+          "const header = enc({ alg: 'HS256', typ: 'JWT' });",
+          "const payload = enc({ sub: 'postman', exp: Math.floor(Date.now() / 1000) + 3600 });",
+          "const signature = b64url(CryptoJS.HmacSHA256(header + '.' + payload, secret));",
+          "pm.collectionVariables.set('token', header + '.' + payload + '.' + signature);",
+          "pm.collectionVariables.set('documentNumber', 'PM' + Math.random().toString(36).slice(2, 12).toUpperCase());",
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "jwtSecret",
+      "value": "change-me-with-a-long-random-secret-of-32-chars-min"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "documentNumber",
+      "value": ""
+    },
+    {
+      "key": "validationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y dependencias up', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.checks.mongodb).to.eql('up');",
+                  "  pm.expect(b.checks.dynamodb).to.eql('up');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /docs.json (OpenAPI)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/docs.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "docs.json"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con paths', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().paths).to.have.property('/validations');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validations",
+      "item": [
+        {
+          "name": "POST /validations (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/validations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada Lovelace\",\n  \"documentNumber\": \"{{documentNumber}}\",\n  \"countryCode\": \"co\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con id y Location', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(pm.response.headers.get('Location')).to.eql('/validations/' + b.id);",
+                  "  pm.collectionVariables.set('validationId', b.id);",
+                  "});",
+                  "pm.test('enriquecido por apicountries', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(['APPROVED', 'REVIEW']).to.include(b.status);",
+                  "  pm.expect(b.enrichment.provider).to.eql('apicountries');",
+                  "  pm.expect(b.countryCode).to.eql('CO');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /validations sin countryCode (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/validations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Carl Sagan\",\n  \"documentNumber\": \"{{documentNumber}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 APPROVED sin enriquecimiento', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.eql('APPROVED');",
+                  "  pm.expect(b.enrichment).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /validations body invalido (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/validations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A\",\n  \"unknown\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 VALIDATION_ERROR con detalles', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(e.details).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /validations sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/validations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada\",\n  \"documentNumber\": \"AB12345\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 UNAUTHORIZED', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /validations/:id (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/validations/{{validationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations",
+                "{{validationId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con el registro creado', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('validationId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /validations/:id invalido (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/validations/no-es-un-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations",
+                "no-es-un-uuid"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 por id invalido', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().error.details[0].field).to.eql('params.id');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /validations/:id inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/validations/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validations",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 NOT_FOUND', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
