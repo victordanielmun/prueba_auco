@@ -13,10 +13,15 @@ export function createMongoClient(uri: string): MongoClient {
 export class MongoValidationRepository implements ValidationRepository, HealthProbe {
   readonly name = 'mongodb';
 
+  private readonly collection: Collection<ValidationDoc>;
+
   constructor(
     private readonly client: MongoClient,
-    private readonly collection: Collection<ValidationDoc>,
-  ) {}
+    dbName: string,
+    collectionName: string,
+  ) {
+    this.collection = client.db(dbName).collection<ValidationDoc>(collectionName);
+  }
 
   /** Crea índices de forma idempotente (createIndex no falla si ya existen). */
   async ensureIndexes(): Promise<void> {
@@ -44,6 +49,6 @@ export class MongoValidationRepository implements ValidationRepository, HealthPr
   }
 
   async check(): Promise<void> {
-    await this.client.db().command({ ping: 1 });
+    await this.client.db(this.collection.dbName).command({ ping: 1 });
   }
 }
