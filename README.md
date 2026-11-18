@@ -161,6 +161,16 @@ Cubren `/health`, `POST /validations`, `GET /validations/:id` y los códigos 400
 
 Genera su propio JWT, recorre los endpoints con salida coloreada y consulta **DynamoDB Local por documento** para confirmar los eventos de auditoría. Devuelve código 0 si todo pasa. Parámetros: `-BaseUrl`, `-DynamoEndpoint`, `-AuditTable`, `-JwtSecret`, `-SkipDynamo`.
 
+### Levantar y validar de una vez (PowerShell)
+
+```powershell
+.\scripts\start-and-validate.ps1            # docker compose up --build, espera /health y valida todo
+.\scripts\start-and-validate.ps1 -NoBuild   # reutiliza la imagen existente
+.\scripts\start-and-validate.ps1 -Down      # apaga el stack al terminar
+```
+
+Crea `.env` si falta, levanta MongoDB + DynamoDB Local + API, espera a que `/health` responda, genera el JWT (o usa `-Token`), prueba 401/201/200/400/404 y consulta DynamoDB Local por documento mostrando los eventos de auditoría. No necesita AWS CLI. Parámetros: `-BaseUrl`, `-DynamoEndpoint`, `-AuditTable`, `-Token`, `-JwtSecret`, `-StartupTimeoutSec`.
+
 ### Postman
 
 Importa `postman/validation-service.postman_collection.json`, ajusta la variable `jwtSecret` al `JWT_SECRET` de tu `.env` y ejecútala con el Collection Runner. El token se genera solo antes de cada petición.
