@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+tests
+playwright-report
+test-results
+postman
+scripts
+*.md
+.claude

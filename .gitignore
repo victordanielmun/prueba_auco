@@ -1,0 +1,27 @@
+# dependencias y build
+node_modules/
+dist/
+coverage/
+
+# entorno (usa .env.example como plantilla)
+.env
+.env.*
+!.env.example
+
+# pruebas
+playwright-report/
+test-results/
+blob-report/
+
+# logs y SO
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# configuración local de Claude Code
+.claude/settings.local.json
